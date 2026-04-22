@@ -40,7 +40,8 @@ def iter_epubs(root: Path) -> list[Path]:
     out: list[Path] = []
     for dirpath, _dirnames, filenames in os.walk(root):
         for name in filenames:
-            if name.lower().endswith(".epub"):
+            lower = name.lower()
+            if lower.endswith(".epub") and ".epub3-tmp-" not in lower:
                 out.append(Path(dirpath) / name)
     return sorted(out)
 
@@ -98,18 +99,28 @@ def convert_with_calibre(src: Path) -> None:
         raise
 
 
-def maybe_upgrade(path: Path, stable_seconds: float) -> None:
+def maybe_upgrade(
+    path: Path,
+    stable_seconds: float,
+    *,
+    progress: str | None = None,
+) -> str:
+    """
+    Returns: upgraded | skipped_not_file | skipped_unstable | skipped_already_epub3
+    """
     path = path.resolve()
-    if not path.is_file() or not path.suffix.lower() == ".epub":
-        return
+    prefix = f"[{progress}] " if progress else ""
+    if not path.is_file() or path.suffix.lower() != ".epub":
+        return "skipped_not_file"
     if not wait_file_stable(path, stable_seconds):
-        LOG.debug("Skipped (not stable or missing): %s", path)
-        return
+        LOG.debug("%sSkipped (file still changing or missing): %s", prefix, path)
+        return "skipped_unstable"
     if not is_epub2(path):
-        LOG.debug("Already EPUB 3 (or unreadable OPF): %s", path)
-        return
-    LOG.info("EPUB 2 detected, converting: %s", path)
+        LOG.debug("%sSkipped (already EPUB 3 or unreadable OPF): %s", prefix, path)
+        return "skipped_already_epub3"
+    LOG.info("%sEPUB 2 detected, converting: %s", prefix, path)
     convert_with_calibre(path)
+    return "upgraded"
 
 
 class EpubHandler(FileSystemEventHandler):
@@ -157,11 +168,34 @@ class EpubHandler(FileSystemEventHandler):
 
 def scan_existing(root: Path, stable_seconds: float) -> None:
     LOG.info("CONVERT_EXISTING: scanning %s", root)
-    for path in iter_epubs(root):
+    paths = iter_epubs(root)
+    total = len(paths)
+    LOG.info("CONVERT_EXISTING: found %d .epub file(s) in tree", total)
+    counts = {
+        "upgraded": 0,
+        "skipped_not_file": 0,
+        "skipped_unstable": 0,
+        "skipped_already_epub3": 0,
+        "failed": 0,
+    }
+    for idx, path in enumerate(paths, start=1):
+        progress = f"{idx}/{total}"
         try:
-            maybe_upgrade(path, stable_seconds)
+            status = maybe_upgrade(path, stable_seconds, progress=progress)
+            counts[status] += 1
         except Exception:
             LOG.exception("Failed during bulk scan: %s", path)
+            counts["failed"] += 1
+    LOG.info(
+        "CONVERT_EXISTING: finished — upgraded=%d, skipped_already_epub3=%d, "
+        "skipped_unstable=%d, skipped_not_file=%d, failed=%d (total .epub=%d)",
+        counts["upgraded"],
+        counts["skipped_already_epub3"],
+        counts["skipped_unstable"],
+        counts["skipped_not_file"],
+        counts["failed"],
+        total,
+    )
 
 
 def main() -> int:
