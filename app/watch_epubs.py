@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 import threading
 import time
 from pathlib import Path
@@ -62,7 +63,10 @@ def wait_file_stable(path: Path, seconds: float, checks: int = 3) -> bool:
 
 
 def convert_with_calibre(src: Path) -> None:
-    tmp = src.with_suffix(src.suffix + ".upgrading")
+    # Calibre picks the output plugin from the *final* file extension; names like
+    # "book.epub.upgrading" are parsed as format "upgrading", not EPUB.
+    suffix = src.suffix if src.suffix.lower() == ".epub" else ".epub"
+    tmp = src.with_name(f"{src.stem}.epub3-tmp-{uuid.uuid4().hex}{suffix}")
     try:
         subprocess.run(
             [
