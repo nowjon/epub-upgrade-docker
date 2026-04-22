@@ -1,4 +1,6 @@
-FROM ubuntu:24.04
+# Ubuntu 24.04 ships Calibre 7.x on Python 3.12; EPUB2→3 can hit a Calibre bug
+# (bytes/str mix in serialize_item). 22.04’s Calibre + Python 3.10 avoids it.
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
