@@ -36,6 +36,38 @@ def env_int(name: str, default: int) -> int:
     return int(raw)
 
 
+def env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return float(str(raw).strip())
+    except ValueError:
+        return default
+
+
+def is_storyteller_audiobook_bundle(path: Path) -> bool:
+    """
+    Immersive / hybrid EPUBs (e.g. name contains "storyteller") that embed audio
+    are usually huge compared to a text-only EPUB. Skip when name matches and size
+    is above STORYTELLER_MAX_SIZE_MB (default 50 MiB).
+    """
+    if not env_bool("SKIP_STORYTELLER_BUNDLES", True):
+        return False
+    marker = os.environ.get("STORYTELLER_NAME_MARKER", "storyteller").strip().lower()
+    if not marker or marker not in path.name.lower():
+        return False
+    threshold_mb = env_float("STORYTELLER_MAX_SIZE_MB", 50.0)
+    if threshold_mb <= 0:
+        return False
+    threshold_bytes = int(threshold_mb * 1024 * 1024)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
+    return size > threshold_bytes
+
+
 def iter_epubs(root: Path) -> list[Path]:
     out: list[Path] = []
     for dirpath, _dirnames, filenames in os.walk(root):
@@ -107,6 +139,7 @@ def maybe_upgrade(
 ) -> str:
     """
     Returns: upgraded | skipped_not_file | skipped_unstable | skipped_already_epub3
+        | skipped_storyteller_bundle
     """
     path = path.resolve()
     prefix = f"[{progress}] " if progress else ""
@@ -115,6 +148,19 @@ def maybe_upgrade(
     if not wait_file_stable(path, stable_seconds):
         LOG.debug("%sSkipped (file still changing or missing): %s", prefix, path)
         return "skipped_unstable"
+    if is_storyteller_audiobook_bundle(path):
+        try:
+            sz = path.stat().st_size
+        except OSError:
+            sz = -1
+        LOG.info(
+            "%sSkipped (storyteller-style bundle, size %s bytes > %.1f MiB threshold): %s",
+            prefix,
+            sz,
+            env_float("STORYTELLER_MAX_SIZE_MB", 50.0),
+            path,
+        )
+        return "skipped_storyteller_bundle"
     if not is_epub2(path):
         LOG.debug("%sSkipped (already EPUB 3 or unreadable OPF): %s", prefix, path)
         return "skipped_already_epub3"
@@ -176,6 +222,7 @@ def scan_existing(root: Path, stable_seconds: float) -> None:
         "skipped_not_file": 0,
         "skipped_unstable": 0,
         "skipped_already_epub3": 0,
+        "skipped_storyteller_bundle": 0,
         "failed": 0,
     }
     for idx, path in enumerate(paths, start=1):
@@ -188,9 +235,11 @@ def scan_existing(root: Path, stable_seconds: float) -> None:
             counts["failed"] += 1
     LOG.info(
         "CONVERT_EXISTING: finished — upgraded=%d, skipped_already_epub3=%d, "
-        "skipped_unstable=%d, skipped_not_file=%d, failed=%d (total .epub=%d)",
+        "skipped_storyteller_bundle=%d, skipped_unstable=%d, skipped_not_file=%d, "
+        "failed=%d (total .epub=%d)",
         counts["upgraded"],
         counts["skipped_already_epub3"],
+        counts["skipped_storyteller_bundle"],
         counts["skipped_unstable"],
         counts["skipped_not_file"],
         counts["failed"],

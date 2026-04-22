@@ -49,6 +49,9 @@ Set `CONVERT_EXISTING=true` once to scan the whole tree for EPUB 2 files at star
 | `POLL_INTERVAL_SECONDS` | `10` | Polling interval |
 | `EVENT_DEBOUNCE_SECONDS` | `2` | Debounce after file events |
 | `FILE_STABLE_SECONDS` | `5` | Wait for file size to stabilize |
+| `SKIP_STORYTELLER_BUNDLES` | `true` | Skip large “storyteller”-style EPUBs that embed audio |
+| `STORYTELLER_NAME_MARKER` | `storyteller` | Case-insensitive substring in the **filename** (both required with size below) |
+| `STORYTELLER_MAX_SIZE_MB` | `50` | Skip only if the filename contains the marker **and** size is greater than this many MiB |
 
 ## Compose
 

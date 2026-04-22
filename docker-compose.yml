@@ -16,5 +16,9 @@ services:
       EVENT_DEBOUNCE_SECONDS: "2"
       # Wait until .epub byte size stops changing before running Calibre.
       FILE_STABLE_SECONDS: "5"
+      # Skip EPUBs whose name contains "storyteller" and size exceeds N MiB (audio-in-EPUB bundles).
+      SKIP_STORYTELLER_BUNDLES: "true"
+      STORYTELLER_NAME_MARKER: "storyteller"
+      STORYTELLER_MAX_SIZE_MB: "50"
     volumes:
       - /mnt/user/Media/Audiobooks:/data
