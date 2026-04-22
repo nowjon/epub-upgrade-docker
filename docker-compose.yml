@@ -1,0 +1,20 @@
+services:
+  epub-upgrade:
+    build: .
+    image: epub-upgrade-watcher:latest
+    container_name: epub-upgrade-watcher
+    restart: unless-stopped
+    environment:
+      # Host path is mounted below; inside the container this is the tree to watch.
+      WATCH_PATH: /data
+      # Walk the entire mount once at startup and upgrade every EPUB 2 file found.
+      CONVERT_EXISTING: "false"
+      # User/merge shares often lack inotify; polling is the default.
+      USE_POLLING: "true"
+      POLL_INTERVAL_SECONDS: "10"
+      # Coalesce rapid create/modify events (e.g. copy finishing).
+      EVENT_DEBOUNCE_SECONDS: "2"
+      # Wait until .epub byte size stops changing before running Calibre.
+      FILE_STABLE_SECONDS: "5"
+    volumes:
+      - /mnt/user/Media/Audiobooks:/data
